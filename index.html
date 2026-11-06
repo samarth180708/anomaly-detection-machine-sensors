@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Machine Sensor Anomaly Detection – IIoT</title>
+<style>
+:root{--bg:#f3f1ec;--card:#fff;--ink:#1d2a2e;--mut:#6b7a80;--line:#d9d6cd;--acc:#0f766e;--bad:#d62828}
+@media(prefers-color-scheme:dark){:root{--bg:#141a1c;--card:#1d2528;--ink:#e6ecee;--mut:#8da0a6;--line:#2e3a3e;--acc:#3ccbb9;--bad:#ff5a5f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Georgia,serif;padding:16px;max-width:980px;margin:auto}
+h1{font-size:1.5rem;margin:.2em 0}p.sub{color:var(--mut);margin:0 0 14px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);padding:10px;border-radius:6px;margin-bottom:12px;font-family:system-ui,sans-serif;font-size:13px}
+button,select,label.up{font:inherit;padding:6px 10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:4px;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc)}
+button.p{background:var(--acc);color:#fff;border-color:var(--acc)}
+.stats{display:flex;gap:18px;margin-left:auto}.stats b{font-size:1.1rem;display:block}.stats span{color:var(--mut);font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px}
+.card h2{font:600 14px system-ui,sans-serif;margin:0 0 4px;display:flex;justify-content:space-between}
+.card canvas{width:100%;height:110px;display:block}.ok{color:var(--acc)}.bad{color:var(--bad)}
+#log{font:12px ui-monospace,Menlo,monospace;max-height:180px;overflow:auto;margin:0;padding:0;list-style:none}
+#log li{padding:2px 0;border-bottom:1px solid var(--line)}
+</style></head><body>
+<h1>Anomaly Detection in Machine Sensor Readings</h1>
+<p class="sub">IIoT live prototype: simulated machine sensors, streaming detector, fault injection, CSV replay.</p>
+<div class="bar">
+ <button class="p" id="run">Pause</button>
+ <label>Method <select id="m"><option value="z">Rolling Z-score</option><option value="e">EWMA residual</option></select></label>
+ <label>Threshold <input id="thr" type="range" min="2" max="6" step="0.5" value="3.5"> <span id="tv">3.5</span>σ</label>
+ <label>Window <select id="W"><option>30</option><option selected>60</option><option>120</option></select></label>
+ <button id="sp">Inject spike</button><button id="dr">Inject drift</button><button id="rs">Reset</button>
+ <label class="up">Replay CSV<input id="csv" type="file" accept=".csv" hidden></label>
+ <div class="stats"><div><b id="n">0</b><span>readings</span></div><div><b id="a" class="bad">0</b><span>anomalies</span></div></div>
+</div>
+<div id="cards"></div>
+<div class="card"><h2>Alert log</h2><ul id="log"></ul></div>
+<script>
+const $=id=>document.getElementById(id),avg=a=>a.reduce((s,x)=>s+x,0)/a.length;
+const rn=()=>{let u=0,v=0;while(!u)u=Math.random();v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+class Det{constructor(){this.w=[];this.r=[];this.e=null}
+ push(v,W,thr,m){let z=0;
+  if(m==='z'){if(this.w.length>=10){const mu=avg(this.w),sd=Math.sqrt(avg(this.w.map(x=>(x-mu)**2)))||1e-6;z=(v-mu)/sd}}
+  else if(this.e!==null&&this.r.length>=10){const sd=Math.sqrt(avg(this.r.map(x=>x*x)))||1e-6;z=(v-this.e)/sd}
+  const f=Math.abs(z)>thr;
+  if(this.e!==null&&!f){this.r.push(v-this.e);if(this.r.length>W)this.r.shift()}
+  this.e=this.e===null?v:.3*v+.7*this.e;
+  if(!f){this.w.push(v);if(this.w.length>W)this.w.shift()}
+  return{z,f}}}
+const CFG=[{n:'Temperature (°C)',b:70,a:3,s:.6,c:'#e4572e'},{n:'Vibration (mm/s)',b:4,a:.8,s:.2,c:'#2a9d8f'},{n:'Pressure (bar)',b:6,a:.4,s:.08,c:'#3d7be0'}];
+let S=[],t=0,run=true,total=0,bad=0;
+function mk(name,color,live,cfg){const d=document.createElement('div');d.className='card';
+ d.innerHTML=`<h2><span>${name}</span><span class="st ok">normal</span></h2><canvas></canvas>`;$('cards').appendChild(d);
+ return{name,color,live,cfg,vals:[],flags:[],det:new Det,cv:d.querySelector('canvas'),st:d.querySelector('.st'),spike:0,drift:0}}
+function init(){$('cards').innerHTML='';S=CFG.map(c=>mk(c.n,c.c,true,c));t=0;total=0;bad=0;$('log').innerHTML='';stats()}
+function stats(){$('n').textContent=total;$('a').textContent=bad}
+function log(s,v,z){const li=document.createElement('li');li.innerHTML=`<span class="bad">ALERT</span> ${new Date().toLocaleTimeString()} ${s.name} = ${v.toFixed(2)} (z=${z.toFixed(1)})`;
+ $('log').prepend(li);while($('log').children.length>60)$('log').lastChild.remove()}
+function feed(s,v,quiet){const r=s.det.push(v,+$('W').value,+$('thr').value,$('m').value);
+ s.vals.push(v);s.flags.push(r.f);total++;if(r.f){bad++;if(!quiet)log(s,v,r.z)}
+ if(s.live&&s.vals.length>400){s.vals.shift();s.flags.shift()}return r}
+function tick(){t++;S.filter(s=>s.live).forEach(s=>{const c=s.cfg;let v=c.b+c.a*Math.sin(t/15)+c.s*rn();
+ if(s.spike>0){v+=12*c.s;s.spike--}
+ if(s.drift>0){v+=(60-s.drift)*c.s*.12;s.drift--}
+ const r=feed(s,v);s.st.textContent=r.f?'ANOMALY':'normal';s.st.className='st '+(r.f?'bad':'ok')});stats();S.forEach(draw)}
+function draw(s){const c=s.cv,d=devicePixelRatio||1,w=c.clientWidth*d,h=c.clientHeight*d;if(c.width!==w||c.height!==h){c.width=w;c.height=h}
+ const x=c.getContext('2d');x.clearRect(0,0,w,h);const N=s.live?200:s.vals.length,v=s.vals.slice(-N),f=s.flags.slice(-N);if(v.length<2)return;
+ let mn=Math.min(...v),mx=Math.max(...v);const p=(mx-mn)*.15||1;mn-=p;mx+=p;
+ const X=i=>i/(N-1)*w,Y=y=>h-(y-mn)/(mx-mn)*h;x.lineWidth=1.5*d;x.strokeStyle=s.color;x.beginPath();
+ v.forEach((y,i)=>i?x.lineTo(X(i),Y(y)):x.moveTo(X(i),Y(y)));x.stroke();x.fillStyle='#d62828';
+ f.forEach((b,i)=>{if(b){x.beginPath();x.arc(X(i),Y(v[i]),3.5*d,0,7);x.fill()}})}
+$('run').onclick=()=>{run=!run;$('run').textContent=run?'Pause':'Resume'};
+$('thr').oninput=e=>$('tv').textContent=e.target.value;
+$('sp').onclick=()=>{const l=S.filter(s=>s.live);l[Math.floor(Math.random()*l.length)].spike=3};
+$('dr').onclick=()=>{const l=S.filter(s=>s.live);l[Math.floor(Math.random()*l.length)].drift=60};
+$('rs').onclick=init;
+$('csv').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{
+ const v=txt.split(/\r?\n/).map(l=>parseFloat(l.split(',').pop())).filter(x=>!isNaN(x));
+ if(v.length<20){alert('CSV needs at least 20 numeric rows (value in the last column).');return}
+ const s=mk('CSV replay: '+f.name,'#7b5ea7',false,null);S.push(s);let n=0;
+ v.forEach(x=>{if(feed(s,x,true).f)n++});s.st.textContent=n+' anomalies';s.st.className='st '+(n?'bad':'ok');stats();draw(s);e.target.value=''})};
+addEventListener('resize',()=>S.forEach(draw));
+init();setInterval(()=>{if(run)tick()},200);
+</script></body></html>
