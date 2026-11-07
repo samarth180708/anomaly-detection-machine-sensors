@@ -3,37 +3,97 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Machine Sensor Anomaly Detection – IIoT</title>
 <style>
-:root{--bg:#f3f1ec;--card:#fff;--ink:#1d2a2e;--mut:#6b7a80;--line:#d9d6cd;--acc:#0f766e;--bad:#d62828}
-@media(prefers-color-scheme:dark){:root{--bg:#141a1c;--card:#1d2528;--ink:#e6ecee;--mut:#8da0a6;--line:#2e3a3e;--acc:#3ccbb9;--bad:#ff5a5f}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Georgia,serif;padding:16px;max-width:980px;margin:auto}
+:root{--bg:#f3f1ec;--card:#fff;--ink:#1d2a2e;--mut:#6b7a80;--line:#d9d6cd;--acc:#0f766e;--bad:#d62828;--warn:#b7791f;--shade:rgba(214,40,40,.10)}
+@media(prefers-color-scheme:dark){:root{--bg:#141a1c;--card:#1d2528;--ink:#e6ecee;--mut:#8da0a6;--line:#2e3a3e;--acc:#3ccbb9;--bad:#ff5a5f;--warn:#e9b44c;--shade:rgba(255,90,95,.14)}}
+*{box-sizing:border-box}
+body{margin:0 auto;background:var(--bg);color:var(--ink);font:15px/1.5 Georgia,serif;padding:16px;max-width:1240px}
 h1{font-size:1.5rem;margin:.2em 0}p.sub{color:var(--mut);margin:0 0 14px}
-.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);padding:10px;border-radius:6px;margin-bottom:12px;font-family:system-ui,sans-serif;font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:var(--card);border:1px solid var(--line);padding:10px;border-radius:6px;margin-bottom:10px;font-family:system-ui,sans-serif;font-size:13px}
+.bar .lbl{color:var(--mut)}
 button,select,label.up{font:inherit;padding:6px 10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:4px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc)}
 button.p{background:var(--acc);color:#fff;border-color:var(--acc)}
-.stats{display:flex;gap:18px;margin-left:auto}.stats b{font-size:1.1rem;display:block}.stats span{color:var(--mut);font-size:12px}
+input[type=range]{vertical-align:middle;width:110px}
+#model{font-family:system-ui,sans-serif;font-size:13px;margin:0 0 10px;color:var(--mut)}
+#model.ok{color:var(--acc)}#model.bad{color:var(--bad)}
+#info{font-family:system-ui,sans-serif;font-size:13px;margin:0 0 10px;padding:8px 10px;border-radius:6px;border:1px dashed var(--line);display:none}
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:10px;font-family:system-ui,sans-serif}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px 12px}
+.tile span{display:block;color:var(--mut);font-size:12px}.tile b{font-size:1.25rem;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:3fr 1.25fr;gap:10px;align-items:start}
 .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:10px}
-.card h2{font:600 14px system-ui,sans-serif;margin:0 0 4px;display:flex;justify-content:space-between}
-.card canvas{width:100%;height:110px;display:block}.ok{color:var(--acc)}.bad{color:var(--bad)}
-#log{font:12px ui-monospace,Menlo,monospace;max-height:180px;overflow:auto;margin:0;padding:0;list-style:none}
-#log li{padding:2px 0;border-bottom:1px solid var(--line)}
+.card h2{font:600 14px system-ui,sans-serif;margin:0 0 4px;display:flex;justify-content:space-between;gap:8px}
+.card canvas{width:100%;height:110px;display:block}.card canvas.tall{height:140px}
+.ok{color:var(--acc)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.rc{font:13px system-ui,sans-serif;margin:6px 0}.rc .track{height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-top:3px}
+.rc .fill{height:100%;background:var(--acc);border-radius:4px;transition:width .2s}
+.note{font:12px system-ui,sans-serif;color:var(--mut);margin:2px 0 6px}
+table{width:100%;border-collapse:collapse;font:13px system-ui,sans-serif}
+th,td{text-align:left;padding:4px 2px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:500}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+#log{font:12px ui-monospace,Menlo,monospace;max-height:320px;overflow:auto;margin:0;padding:0;list-style:none}
+#log li{padding:3px 0;border-bottom:1px solid var(--line)}#log .tag{color:var(--mut)}
+@media(max-width:860px){.grid{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,1fr)}.tiles .tile:last-child{grid-column:span 2}}
 </style></head><body>
 <h1>Anomaly Detection in Machine Sensor Readings</h1>
-<p class="sub">IIoT live prototype: simulated machine sensors, streaming detector, fault injection, CSV replay.</p>
+<p class="sub">IIoT live prototype: LSTM Autoencoder vs. statistical baselines · simulated machine or CSV replay · live fault injection.</p>
+
 <div class="bar">
  <button class="p" id="run">Pause</button>
- <label>Method <select id="m"><option value="z">Rolling Z-score</option><option value="e">EWMA residual</option></select></label>
- <label>Threshold <input id="thr" type="range" min="2" max="6" step="0.5" value="3.5"> <span id="tv">3.5</span>σ</label>
- <label>Window <select id="W"><option>30</option><option selected>60</option><option>120</option></select></label>
- <button id="sp">Inject spike</button><button id="dr">Inject drift</button><button id="rs">Reset</button>
- <label class="up">Replay CSV<input id="csv" type="file" accept=".csv" hidden></label>
- <div class="stats"><div><b id="n">0</b><span>readings</span></div><div><b id="a" class="bad">0</b><span>anomalies</span></div></div>
+ <label><span class="lbl">Data</span> <select id="src"><option value="sim">Simulator</option><option value="csv">Upload CSV</option></select></label>
+ <label class="up" id="csvl" hidden>Choose CSV<input id="csv" type="file" accept=".csv" hidden></label>
+ <label><span class="lbl">Method</span> <select id="m"><option value="lstm">LSTM Autoencoder</option><option value="z">Rolling Z-score</option><option value="e">EWMA residual</option></select></label>
+ <label><span class="lbl">Readings/sec</span> <input id="rps" type="range" min="1" max="25" step="1" value="8"> <span id="rpsv">8</span></label>
+ <button id="rs">Reset</button>
 </div>
-<div id="cards"></div>
-<div class="card"><h2>Alert log</h2><ul id="log"></ul></div>
+<div class="bar">
+ <label><span class="lbl">Z threshold</span> <input id="thr" type="range" min="2" max="6" step="0.5" value="3.5"> <span id="tv">3.5</span>σ</label>
+ <label><span class="lbl">Z window</span> <select id="W"><option>30</option><option selected>60</option><option>120</option></select></label>
+ <label><span class="lbl">LSTM sensitivity</span> <input id="ls" type="range" min="0.5" max="3" step="0.1" value="1"> <span id="lsv">1.0</span>× threshold</label>
+</div>
+<div class="bar" id="faults">
+ <span class="lbl">Inject fault</span>
+ <button data-f="spike">⚡ Spike</button><button data-f="drift">📈 Drift</button>
+ <button data-f="overheat">🔥 Overheat</button><button data-f="corr_break">🔀 Correlation break</button>
+ <span class="lbl" id="fnote" hidden>Fault buttons work only with the simulator</span>
+</div>
+
+<p id="model">LSTM model: loading…</p>
+<div id="info"></div>
+
+<div class="tiles">
+ <div class="tile"><span>Readings</span><b id="n">0</b></div>
+ <div class="tile"><span id="evl">Anomaly events</span><b id="a" class="bad">0</b></div>
+ <div class="tile"><span>Machine health (LSTM)</span><b id="h">–</b></div>
+ <div class="tile"><span>Status</span><b id="stat">–</b></div>
+ <div class="tile"><span>Fault in data</span><b id="fd">none</b></div>
+</div>
+
+<div class="grid">
+ <div id="cards"></div>
+ <div>
+  <div class="card"><h2>Root cause (LSTM)</h2><div id="rc"><p class="note">Waiting for the first 30 readings…</p></div></div>
+  <div class="card"><h2>Method comparison</h2><p class="note" id="fc">Faults in data so far: 0</p>
+   <table><thead><tr><th>Method</th><th class="n">Faults caught</th><th class="n">False alarms</th></tr></thead><tbody id="cmp"></tbody></table></div>
+  <div class="card"><h2>Alert log</h2><ul id="log"></ul></div>
+ </div>
+</div>
+
 <script>
 const $=id=>document.getElementById(id),avg=a=>a.reduce((s,x)=>s+x,0)/a.length;
 const rn=()=>{let u=0,v=0;while(!u)u=Math.random();v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+
+const SENSORS=['temperature','vibration','pressure','current'];
+const META={temperature:{n:'Temperature',u:'°C',c:'#e4572e'},vibration:{n:'Vibration',u:'mm/s',c:'#2a9d8f'},
+            pressure:{n:'Pressure',u:'bar',c:'#3d7be0'},current:{n:'Current',u:'A',c:'#8e5bd6'}};
+const METHODS={lstm:'LSTM Autoencoder',z:'Rolling Z-score',e:'EWMA residual'};
+const FAULT_LEN={spike:5,drift:300,overheat:200,corr_break:200};
+const SHOW=300;   // readings visible on the charts
+const GAP=10;     // alarms within 10 readings of each other = one anomaly event
+const TAIL=30;    // readings after a fault ends that are not counted as false alarms
+
+// ---------- Friend's detector (logic unchanged: anomalies are kept out of the window) ----------
 class Det{constructor(){this.w=[];this.r=[];this.e=null}
  push(v,W,thr,m){let z=0;
   if(m==='z'){if(this.w.length>=10){const mu=avg(this.w),sd=Math.sqrt(avg(this.w.map(x=>(x-mu)**2)))||1e-6;z=(v-mu)/sd}}
@@ -43,38 +103,229 @@ class Det{constructor(){this.w=[];this.r=[];this.e=null}
   this.e=this.e===null?v:.3*v+.7*this.e;
   if(!f){this.w.push(v);if(this.w.length>W)this.w.shift()}
   return{z,f}}}
-const CFG=[{n:'Temperature (°C)',b:70,a:3,s:.6,c:'#e4572e'},{n:'Vibration (mm/s)',b:4,a:.8,s:.2,c:'#2a9d8f'},{n:'Pressure (bar)',b:6,a:.4,s:.08,c:'#3d7be0'}];
-let S=[],t=0,run=true,total=0,bad=0;
-function mk(name,color,live,cfg){const d=document.createElement('div');d.className='card';
- d.innerHTML=`<h2><span>${name}</span><span class="st ok">normal</span></h2><canvas></canvas>`;$('cards').appendChild(d);
- return{name,color,live,cfg,vals:[],flags:[],det:new Det,cv:d.querySelector('canvas'),st:d.querySelector('.st'),spike:0,drift:0}}
-function init(){$('cards').innerHTML='';S=CFG.map(c=>mk(c.n,c.c,true,c));t=0;total=0;bad=0;$('log').innerHTML='';stats()}
-function stats(){$('n').textContent=total;$('a').textContent=bad}
-function log(s,v,z){const li=document.createElement('li');li.innerHTML=`<span class="bad">ALERT</span> ${new Date().toLocaleTimeString()} ${s.name} = ${v.toFixed(2)} (z=${z.toFixed(1)})`;
- $('log').prepend(li);while($('log').children.length>60)$('log').lastChild.remove()}
-function feed(s,v,quiet){const r=s.det.push(v,+$('W').value,+$('thr').value,$('m').value);
- s.vals.push(v);s.flags.push(r.f);total++;if(r.f){bad++;if(!quiet)log(s,v,r.z)}
- if(s.live&&s.vals.length>400){s.vals.shift();s.flags.shift()}return r}
-function tick(){t++;S.filter(s=>s.live).forEach(s=>{const c=s.cfg;let v=c.b+c.a*Math.sin(t/15)+c.s*rn();
- if(s.spike>0){v+=12*c.s;s.spike--}
- if(s.drift>0){v+=(60-s.drift)*c.s*.12;s.drift--}
- const r=feed(s,v);s.st.textContent=r.f?'ANOMALY':'normal';s.st.className='st '+(r.f?'bad':'ok')});stats();S.forEach(draw)}
-function draw(s){const c=s.cv,d=devicePixelRatio||1,w=c.clientWidth*d,h=c.clientHeight*d;if(c.width!==w||c.height!==h){c.width=w;c.height=h}
- const x=c.getContext('2d');x.clearRect(0,0,w,h);const N=s.live?200:s.vals.length,v=s.vals.slice(-N),f=s.flags.slice(-N);if(v.length<2)return;
- let mn=Math.min(...v),mx=Math.max(...v);const p=(mx-mn)*.15||1;mn-=p;mx+=p;
- const X=i=>i/(N-1)*w,Y=y=>h-(y-mn)/(mx-mn)*h;x.lineWidth=1.5*d;x.strokeStyle=s.color;x.beginPath();
- v.forEach((y,i)=>i?x.lineTo(X(i),Y(y)):x.moveTo(X(i),Y(y)));x.stroke();x.fillStyle='#d62828';
- f.forEach((b,i)=>{if(b){x.beginPath();x.arc(X(i),Y(v[i]),3.5*d,0,7);x.fill()}})}
+
+// ---------- LSTM Autoencoder, run in the browser from exported Keras weights ----------
+let M=null;
+const sig=x=>1/(1+Math.exp(-x));
+function prepLSTM([K,R,b]){const u=R.length,g=4*u;
+ return{nin:K.length,u,K:Float64Array.from(K.flat()),R:Float64Array.from(R.flat()),b:Float64Array.from(b),g}}
+function lstmStep(L,x,h,c){const{nin,u,K,R,b,g}=L,z=Float64Array.from(b);
+ for(let i=0;i<nin;i++){const xi=x[i];if(!xi)continue;const o=i*g;for(let j=0;j<g;j++)z[j]+=xi*K[o+j]}
+ for(let i=0;i<u;i++){const hi=h[i];if(!hi)continue;const o=i*g;for(let j=0;j<g;j++)z[j]+=hi*R[o+j]}
+ for(let k=0;k<u;k++){   // Keras gate order: input, forget, cell, output
+  const ig=sig(z[k]),fg=sig(z[u+k]),cg=Math.tanh(z[2*u+k]),og=sig(z[3*u+k]);
+  c[k]=fg*c[k]+ig*cg;h[k]=og*Math.tanh(c[k])}}
+function reconstruct(win){const{enc,dec,dW,db,nf}=M;
+ let h=new Float64Array(enc.u),c=new Float64Array(enc.u);
+ for(const x of win)lstmStep(enc,x,h,c);                     // encoder -> summary vector
+ const s=h,out=[];h=new Float64Array(dec.u);c=new Float64Array(dec.u);
+ for(let t=0;t<win.length;t++){lstmStep(dec,s,h,c);          // decoder rebuilds each step
+  const y=Float64Array.from(db);
+  for(let i=0;i<dec.u;i++){const hi=h[i];for(let j=0;j<nf;j++)y[j]+=hi*dW[i*nf+j]}
+  out.push(y)}
+ return out}
+function lstmScore(raw){const sc=raw.map(r=>r.map((v,j)=>(v-M.mean[j])/M.scale[j]));
+ const out=reconstruct(sc),se=new Array(M.nf).fill(0);
+ sc.forEach((r,t)=>r.forEach((v,j)=>se[j]+=(v-out[t][j])**2/sc.length));
+ return{err:avg(se),sensorErr:se}}
+
+function loadModel(J){
+ const L=J.layers.filter(l=>l.type==='LSTM'),D=J.layers.find(l=>l.type==='Dense');
+ if(L.length!==2||!D)throw Error('unexpected model layers');
+ const enc=prepLSTM(L[0].weights),dec=prepLSTM(L[1].weights),nf=D.weights[1].length;
+ M={enc,dec,nf,dW:Float64Array.from(D.weights[0].flat()),db:Float64Array.from(D.weights[1]),
+    sensors:J.sensors,win:J.window,mean:J.mean,scale:J.scale,thr:J.threshold,normalErr:J.normal_error||.4*J.threshold};
+ let msg='LSTM model ready',cls='ok';
+ if(J.check){const e=lstmScore(J.check.window).err,rel=Math.abs(e-J.check.error)/J.check.error;
+  if(rel<1e-3)msg+=' · verified against Keras ✓';else{msg+=` · WARNING: browser result differs from Keras by ${(rel*100).toFixed(1)}%`;cls='bad'}}
+ $('model').textContent=msg;$('model').className=cls;reset()}
+function modelMissing(){
+ $('model').className='bad';
+ $('model').innerHTML='LSTM model file (lstm_model.json) not found. Statistical methods still work. '+
+  '<label class="up">Load lstm_model.json<input id="mf" type="file" accept=".json" hidden></label>';
+ $('mf').onchange=e=>{const f=e.target.files[0];if(f)f.text().then(t=>{try{loadModel(JSON.parse(t))}catch(err){alert('Could not load model: '+err.message)}})}}
+fetch('lstm_model.json').then(r=>r.ok?r.json():Promise.reject()).then(loadModel).catch(modelMissing);
+
+// ---------- Data source 1: simulated machine (same as the Python training data) ----------
+class Sim{constructor(){this.t=0;this.fault=null;this.k=0;this.done=false}
+ load(t){return Math.min(1,Math.max(0,.5+.3*Math.sin(2*Math.PI*t/600)+.15*Math.sin(2*Math.PI*t/170)))}
+ inject(f){this.fault=f;this.k=0}
+ step(){const L=this.load(this.t),r={t:this.t,
+   temperature:65+10*L+.3*rn(),vibration:2.5+L+.08*rn(),pressure:5.5+L+.05*rn(),current:12+6*L+.2*rn(),fault:'none'};
+  if(this.fault){const k=this.k;
+   if(this.fault==='spike')r.vibration+=2.5;
+   else if(this.fault==='drift')r.vibration+=.006*k;
+   else if(this.fault==='overheat')r.temperature+=Math.min(12,.25*k);
+   else if(this.fault==='corr_break')r.current=12+6*(1-L)+.2*rn();
+   r.fault=this.fault;if(++this.k>=FAULT_LEN[this.fault])this.fault=null}
+  this.t++;return r}}
+
+// ---------- Data source 2: replay an uploaded CSV, one reading at a time ----------
+class Replay{constructor(rows){this.rows=rows;this.i=0;this.done=false}
+ inject(){}
+ step(){if(this.i>=this.rows.length){this.done=true;return null}return{...this.rows[this.i],t:this.i++}}}
+function parseCSV(txt){
+ const lines=txt.trim().split(/\r?\n/),clean=s=>(s||'').trim().replace(/^"|"$/g,'');
+ const head=lines[0].split(',').map(h=>clean(h).toLowerCase()),idx=Object.fromEntries(head.map((h,i)=>[h,i]));
+ const miss=SENSORS.filter(s=>!(s in idx));
+ if(miss.length)throw Error('Missing columns: '+miss.join(', ')+'\nNeeded: temperature, vibration, pressure, current (optional: label or fault)');
+ const rows=[];
+ for(const line of lines.slice(1)){const c=line.split(','),r={};let ok=true;
+  for(const s of SENSORS){r[s]=parseFloat(clean(c[idx[s]]));if(isNaN(r[s]))ok=false}
+  if(!ok)continue;
+  if('fault' in idx&&clean(c[idx.fault]))r.fault=clean(c[idx.fault]);
+  else if('label' in idx)r.fault=+clean(c[idx.label])===1?'anomaly':'none';
+  else r.fault='none';
+  rows.push(r)}
+ if(rows.length<40)throw Error('CSV needs at least 40 valid rows');
+ return rows}
+
+// ---------- State ----------
+let st,csvRows=null,run=true,logVer=-1;
+function reset(){
+ const mode=$('src').value;
+ st={src:mode==='csv'?(csvRows?new Replay(csvRows):null):new Sim(),
+  rows:[],buf:[],det:{z:{},e:{}},readings:0,faultId:0,faultCount:0,sinceFault:1e9,
+  lastFlag:{lstm:-1e9,z:-1e9,e:-1e9},stats:{},contrib:null,health:100,alerts:[],acc:0};
+ for(const m in METHODS)st.stats[m]={events:0,caught:new Set,fa:0};
+ for(const s of SENSORS){st.det.z[s]=new Det;st.det.e[s]=new Det}
+ logVer=-1;render()}
+
+// ---------- Detection for one new reading ----------
+function process(){
+ const row=st.src.step();if(!row)return;
+ const zthr=+$('thr').value,W=+$('W').value,sel=$('m').value;
+
+ // Friend's methods: every sensor checked on its own, the largest |z| decides
+ for(const m of ['z','e']){let best={z:0,s:SENSORS[0]};
+  for(const s of SENSORS){const r=st.det[m][s].push(row[s],W,zthr,m);if(Math.abs(r.z)>Math.abs(best.z))best={z:r.z,s}}
+  row['score_'+m]=Math.abs(best.z);row['flag_'+m]=Math.abs(best.z)>zthr;row['sensor_'+m]=best.s;row['z_'+m]=best.z}
+
+ // LSTM Autoencoder: all sensors together, last 30 readings
+ row.score_lstm=null;row.flag_lstm=false;row.sensor_lstm=null;
+ if(M){st.buf.push(M.sensors.map(s=>row[s]));if(st.buf.length>M.win)st.buf.shift();
+  if(st.buf.length===M.win){
+   const{err,sensorErr}=lstmScore(st.buf),lthr=M.thr*+$('ls').value,tot=sensorErr.reduce((a,b)=>a+b,0)||1e-12;
+   st.contrib=sensorErr.map(v=>v/tot);
+   row.score_lstm=err;row.flag_lstm=err>lthr;
+   row.sensor_lstm=M.sensors[sensorErr.indexOf(Math.max(...sensorErr))];
+   const T=M.thr,N=M.normalErr;let h;
+   if(err<=N)h=100-5*err/N;                          // typical normal operation -> 95-100%
+   else if(err<=T)h=95-45*(err-N)/(T-N);             // 95% -> 50% up to the threshold
+   else h=Math.max(0,50-50*(err-T)/T);               // 50% -> 0% beyond the threshold
+   st.health=.8*st.health+.2*h}}
+
+ // Scoreboard: alarms close together = ONE anomaly event
+ st.readings++;
+ if(row.fault!=='none'){if(st.sinceFault>0){st.faultId++;st.faultCount++}st.sinceFault=0}else st.sinceFault++;
+ for(const m in METHODS){
+  if(!row['flag_'+m])continue;
+  const isNew=row.t-st.lastFlag[m]>GAP;st.lastFlag[m]=row.t;
+  if(row.fault!=='none')st.stats[m].caught.add(st.faultId);
+  if(!isNew)continue;
+  st.stats[m].events++;
+  if(row.fault==='none'&&st.sinceFault>TAIL)st.stats[m].fa++;
+  if(m===sel){const s=row['sensor_'+m];let msg;
+   if(m==='lstm'){const lthr=M.thr*+$('ls').value;
+    msg=`Error ${row.score_lstm.toFixed(3)} (${(row.score_lstm/lthr).toFixed(1)}× threshold) · root cause: ${s} ${Math.round(Math.max(...st.contrib)*100)}%`}
+   else{const z=row['z_'+m];msg=`${META[s].n} (${META[s].u}) = ${row[s].toFixed(2)} (z=${z>=0?'+':''}${z.toFixed(1)})`}
+   st.alerts.push({t:row.t,msg,fault:row.fault});if(st.alerts.length>200)st.alerts.shift()}}
+
+ st.rows.push(row);if(st.rows.length>SHOW)st.rows.shift()}
+
+// ---------- Charts ----------
+const cards={};
+function mkCard(key,title,tall){const d=document.createElement('div');d.className='card';
+ d.innerHTML=`<h2><span>${title}</span><span class="st ok"></span></h2><canvas${tall?' class="tall"':''}></canvas>`;
+ $('cards').appendChild(d);cards[key]={cv:d.querySelector('canvas'),st:d.querySelector('.st'),title:d.querySelector('h2 span')}}
+SENSORS.forEach(s=>mkCard(s,`${META[s].n} (${META[s].u})`));
+mkCard('score','Anomaly score',true);
+
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+function drawChart(cv,vals,o){
+ const d=devicePixelRatio||1,w=cv.clientWidth*d,h=cv.clientHeight*d;
+ if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}
+ const x=cv.getContext('2d');x.clearRect(0,0,w,h);
+ const N=SHOW,X=i=>i/(N-1)*w,tf=v=>o.log?Math.log10(Math.max(v,1e-4)):v;
+ const good=vals.filter(v=>v!==null);
+ x.fillStyle=css('--shade');   // real fault periods
+ let s0=null;o.shade.forEach((f,i)=>{if(f&&s0===null)s0=i;
+  if(s0!==null&&(!f||i===N-1)){const e=f?i:i-1;x.fillRect(X(s0),0,Math.max(X(e)-X(s0),2*d),h);s0=null}});
+ if(good.length<2)return;
+ let mn=Math.min(...good.map(tf)),mx=Math.max(...good.map(tf));
+ if(o.thr!=null){mn=Math.min(mn,tf(o.thr));mx=Math.max(mx,tf(o.thr))}
+ if(o.zero)mn=Math.min(mn,0);
+ const p=(mx-mn)*.12||1;mn-=p;mx+=p;const Y=v=>h-(tf(v)-mn)/(mx-mn)*h;
+ if(o.thr!=null){x.strokeStyle=css('--bad');x.lineWidth=1*d;x.setLineDash([5*d,4*d]);
+  x.beginPath();x.moveTo(0,Y(o.thr));x.lineTo(w,Y(o.thr));x.stroke();x.setLineDash([])}
+ x.strokeStyle=o.color;x.lineWidth=1.5*d;x.beginPath();let pen=false;
+ vals.forEach((v,i)=>{if(v===null){pen=false;return}pen?x.lineTo(X(i),Y(v)):x.moveTo(X(i),Y(v));pen=true});x.stroke();
+ if(o.dots){x.fillStyle=css('--bad');o.dots.forEach((b,i)=>{if(b&&vals[i]!==null){x.beginPath();x.arc(X(i),Y(vals[i]),3.2*d,0,7);x.fill()}})}}
+
+// ---------- Page update ----------
+function render(){
+ const m=$('m').value,rows=st.rows,last=rows[rows.length-1];
+ const info=$('info');
+ if(!st.src){info.style.display='block';info.textContent='Choose a CSV file to start the replay.'}
+ else if(st.src.done){info.style.display='block';info.textContent='CSV replay finished · press Reset to play it again.'}
+ else if(m==='lstm'&&!M){info.style.display='block';info.textContent='LSTM model is not loaded yet, so the LSTM method cannot score readings.'}
+ else info.style.display='none';
+
+ const thr=m==='lstm'?(M?M.thr*+$('ls').value:null):+$('thr').value;
+ $('n').textContent=st.readings;
+ $('evl').textContent=`Anomaly events (${METHODS[m]})`;
+ $('a').textContent=st.stats[m].events;
+ $('h').textContent=M&&rows.some(r=>r.score_lstm!==null)?Math.round(st.health)+'%':'–';
+ let stat='–',cls='';const sc=last?last['score_'+m]:null;
+ if(last&&sc!==null&&thr!==null){if(sc>thr){stat='FAULT';cls='bad'}else if(sc>.7*thr){stat='Warning';cls='warn'}else{stat='Normal';cls='ok'}}
+ else if(last)stat='Warming up';
+ $('stat').textContent=stat;$('stat').className=cls;
+ $('fd').textContent=last?last.fault:'none';
+
+ const pad=a=>Array(SHOW-a.length).fill(null).concat(a),shade=pad(rows.map(r=>r.fault!=='none'));
+ for(const s of SENSORS){const dots=pad(rows.map(r=>r['flag_'+m]&&r['sensor_'+m]===s));
+  drawChart(cards[s].cv,pad(rows.map(r=>r[s])),{color:META[s].c,dots,shade});
+  const on=last&&last['flag_'+m]&&last['sensor_'+m]===s;
+  cards[s].st.textContent=on?'ANOMALY':'normal';cards[s].st.className='st '+(on?'bad':'ok')}
+ cards.score.title.textContent=`Anomaly score · ${METHODS[m]}${m==='lstm'?' (log scale)':' (|z|)'}`;
+ drawChart(cards.score.cv,pad(rows.map(r=>r['score_'+m])),{color:css('--mut'),shade,thr,log:m==='lstm',zero:m!=='lstm'});
+ cards.score.st.textContent=thr!==null?`threshold ${m==='lstm'?thr.toFixed(3):thr+'σ'}`:'';cards.score.st.className='st';
+
+ $('rc').innerHTML=st.contrib?M.sensors.map((s,i)=>{const p=Math.round(st.contrib[i]*100);
+   return`<div class="rc">${META[s]?META[s].n:s}: ${p}%<div class="track"><div class="fill" style="width:${p}%"></div></div></div>`}).join('')
+  :`<p class="note">${M?'Waiting for the first 30 readings…':'Needs the LSTM model.'}</p>`;
+
+ $('fc').textContent=`Faults in data so far: ${st.faultCount}`;
+ $('cmp').innerHTML=Object.entries(METHODS).map(([k,name])=>{const v=st.stats[k],na=k==='lstm'&&!M;
+  return`<tr><td>${name}</td><td class="n">${na?'–':v.caught.size+'/'+st.faultCount}</td><td class="n">${na?'–':v.fa}</td></tr>`}).join('');
+
+ const ver=st.alerts.length+':'+(st.alerts.length?st.alerts[st.alerts.length-1].t:'');
+ if(ver!==logVer){logVer=ver;
+  $('log').innerHTML=st.alerts.length?st.alerts.slice(-50).reverse().map(a=>
+   `<li><span class="bad">ALERT</span> t=${a.t} ${a.msg} <span class="tag">[real fault: ${a.fault}]</span></li>`).join('')
+   :'<li class="tag">No alerts yet</li>'}}
+
+// ---------- Controls ----------
 $('run').onclick=()=>{run=!run;$('run').textContent=run?'Pause':'Resume'};
 $('thr').oninput=e=>$('tv').textContent=e.target.value;
-$('sp').onclick=()=>{const l=S.filter(s=>s.live);l[Math.floor(Math.random()*l.length)].spike=3};
-$('dr').onclick=()=>{const l=S.filter(s=>s.live);l[Math.floor(Math.random()*l.length)].drift=60};
-$('rs').onclick=init;
-$('csv').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(txt=>{
- const v=txt.split(/\r?\n/).map(l=>parseFloat(l.split(',').pop())).filter(x=>!isNaN(x));
- if(v.length<20){alert('CSV needs at least 20 numeric rows (value in the last column).');return}
- const s=mk('CSV replay: '+f.name,'#7b5ea7',false,null);S.push(s);let n=0;
- v.forEach(x=>{if(feed(s,x,true).f)n++});s.st.textContent=n+' anomalies';s.st.className='st '+(n?'bad':'ok');stats();draw(s);e.target.value=''})};
-addEventListener('resize',()=>S.forEach(draw));
-init();setInterval(()=>{if(run)tick()},200);
+$('ls').oninput=e=>$('lsv').textContent=(+e.target.value).toFixed(1);
+$('rps').oninput=e=>$('rpsv').textContent=e.target.value;
+$('m').onchange=()=>{logVer=-1;render()};
+$('rs').onclick=reset;
+document.querySelectorAll('#faults button').forEach(b=>b.onclick=()=>{if(st.src)st.src.inject(b.dataset.f)});
+$('src').onchange=()=>{const csv=$('src').value==='csv';
+ $('csvl').hidden=!csv;$('fnote').hidden=!csv;
+ document.querySelectorAll('#faults button').forEach(b=>b.disabled=csv);
+ csvRows=null;reset()};
+$('csv').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{
+ try{csvRows=parseCSV(t);$('csvl').firstChild.textContent=`${f.name} (${csvRows.length} rows)`;reset()}
+ catch(err){alert(err.message)}
+ e.target.value=''})};
+addEventListener('resize',render);
+
+// ---------- Main loop: every 100 ms, process the readings that are due ----------
+reset();
+setInterval(()=>{
+ if(run&&st.src&&!st.src.done){st.acc+=+$('rps').value*.1;const n=Math.floor(st.acc);st.acc-=n;for(let i=0;i<n;i++)process()}
+ render()},100);
 </script></body></html>
